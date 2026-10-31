@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outbound — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Input Outbound</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Outbound</li>
+          </ul>
+          <h1>Input Barang Keluar (Outbound)</h1>
+          <p>Catat barang yang keluar dari gudang atau retur ke supplier</p>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">📤 Form Outbound Baru</div></div>
+            <div class="card-body">
+              <div id="form-alert"></div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Tanggal <span class="required">*</span></label>
+                  <input type="date" id="tanggal" />
+                </div>
+                <div class="form-group">
+                  <label>Kategori <span class="required">*</span></label>
+                  <select id="kategori" onchange="toggleReturField()">
+                    <option value="">-- Pilih Kategori --</option>
+                    <option>Pengiriman</option>
+                    <option>Pemakaian Internal</option>
+                    <option>Retur</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Kode Barang <span class="required">*</span></label>
+                  <select id="kodeBarang" onchange="autofillNama()">
+                    <option value="">-- Pilih Kode --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Nama Barang</label>
+                  <input type="text" id="namaBarang" readonly style="background:var(--surface-2);" />
+                </div>
+                <div class="form-group">
+                  <label>Jumlah <span class="required">*</span></label>
+                  <input type="number" id="jumlah" placeholder="0" min="1" />
+                </div>
+                <div class="form-group">
+                  <label>Satuan</label>
+                  <input type="text" id="satuan" readonly style="background:var(--surface-2);" />
+                </div>
+                <div class="form-group form-full" id="field-supplier" style="display:none;">
+                  <label>Supplier Retur <span class="required">*</span></label>
+                  <input type="text" id="supplier" placeholder="Nama supplier tujuan retur" />
+                </div>
+                <div class="form-group" id="field-sj" style="display:none;">
+                  <label>Nomor SJ Retur</label>
+                  <input type="text" id="nomorSJ" placeholder="RT-XXXX" />
+                </div>
+                <div class="form-group form-full" id="field-keterangan" style="display:none;">
+                  <label>Keterangan Retur</label>
+                  <textarea id="keterangan" placeholder="Alasan retur"></textarea>
+                </div>
+              </div>
+              <div class="btn-group mt-2">
+                <button class="btn btn-primary" onclick="simpanOutbound()">💾 Simpan Data</button>
+                <button class="btn btn-secondary" onclick="resetForm()">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Data Outbound Terbaru</div>
+              <a href="histori-outbound.html" class="btn btn-secondary btn-sm">Semua →</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Barang</th><th>Kategori</th><th>Jml</th><th></th></tr>
+                  </thead>
+                  <tbody id="recent-outbound">
+                    <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let barangList = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('tanggal').value = new Date().toISOString().split('T')[0];
+      barangList = await API.getAllBarang() || [];
+      populateKodeBarang();
+      await renderRecentOutbound();
+    });
+
+    function populateKodeBarang() {
+      const sel = document.getElementById('kodeBarang');
+      barangList.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.kode;
+        opt.textContent = `${b.kode} — ${b.nama} (stok: ${b.stok})`;
+        opt.dataset.nama = b.nama;
+        opt.dataset.satuan = b.satuan;
+        opt.dataset.stok = b.stok;
+        sel.appendChild(opt);
+      });
+    }
+
+    function autofillNama() {
+      const sel = document.getElementById('kodeBarang');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('namaBarang').value = opt?.dataset.nama || '';
+      document.getElementById('satuan').value = opt?.dataset.satuan || '';
+    }
+
+    function toggleReturField() {
+      const isRetur = document.getElementById('kategori').value === 'Retur';
+      ['field-supplier','field-sj','field-keterangan'].forEach(id => {
+        document.getElementById(id).style.display = isRetur ? '' : 'none';
+      });
+    }
+
+    async function simpanOutbound() {
+      document.getElementById('form-alert').innerHTML = '';
+      const tanggal = document.getElementById('tanggal').value;
+      const kategori = document.getElementById('kategori').value;
+      const kodeBarang = document.getElementById('kodeBarang').value;
+      const namaBarang = document.getElementById('namaBarang').value;
+      const jumlah = Number(document.getElementById('jumlah').value);
+      const satuan = document.getElementById('satuan').value;
+      const supplier = document.getElementById('supplier').value.trim();
+      const nomorSJ = document.getElementById('nomorSJ').value.trim();
+      const keterangan = document.getElementById('keterangan').value.trim();
+
+      if (!tanggal || !kategori || !kodeBarang || !jumlah) {
+        document.getElementById('form-alert').innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px;">⚠️ Semua field bertanda * wajib diisi.</div>';
+        return;
+      }
+      if (kategori === 'Retur' && !supplier) {
+        document.getElementById('form-alert').innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px;">⚠️ Supplier retur wajib diisi.</div>';
+        return;
+      }
+
+      const res = await API.addOutbound({ tanggal, kategori, kodeBarang, namaBarang, jumlah, satuan, supplier, nomorSJ, keterangan });
+
+      if (!res || res.error) {
+        document.getElementById('form-alert').innerHTML = `<div class="alert alert-danger" style="margin-bottom:12px;">⚠️ ${res?.error || 'Gagal menyimpan.'}</div>`;
+        return;
+      }
+
+      showToast('✅ Data outbound berhasil disimpan!', 'success');
+      resetForm();
+      await renderRecentOutbound();
+    }
+
+    function resetForm() {
+      ['kodeBarang','kategori','namaBarang','jumlah','satuan','supplier','nomorSJ','keterangan'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      });
+      document.getElementById('tanggal').value = new Date().toISOString().split('T')[0];
+      ['field-supplier','field-sj','field-keterangan'].forEach(id => document.getElementById(id).style.display = 'none');
+      document.getElementById('form-alert').innerHTML = '';
+    }
+
+    async function renderRecentOutbound() {
+      const data = (await API.getAllOutbound() || []).slice(0, 8);
+      if (!data.length) {
+        document.getElementById('recent-outbound').innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada data outbound.</td></tr>';
+        return;
+      }
+      document.getElementById('recent-outbound').innerHTML = data.map(o => `
+        <tr>
+          <td><span style="font-family:var(--font-mono);font-size:.7rem;">${o.id}</span></td>
+          <td>${o.namaBarang}</td>
+          <td><span class="badge ${o.kategori === 'Retur' ? 'badge-amber' : 'badge-green'}">${o.kategori}</span></td>
+          <td>${formatNumber(o.jumlah)} ${o.satuan}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="hapusOutbound('${o.id}')">🗑️</button></td>
+        </tr>`).join('');
+    }
+
+    async function hapusOutbound(id) {
+      confirmAction('Yakin hapus data outbound ini? Stok akan disesuaikan.', async () => {
+        await API.deleteOutbound(id);
+        showToast('Data outbound dihapus.', 'info');
+        await renderRecentOutbound();
+      });
+    }
+  </script>
+</body>
+</html>

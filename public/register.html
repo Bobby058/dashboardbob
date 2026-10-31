@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daftar — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="auth-layout">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo">📦</div>
+        <div class="auth-title">Buat Akun Baru</div>
+        <div class="auth-subtitle">PT Giofans Logistik</div>
+      </div>
+      <div class="auth-body">
+        <div id="alert-area"></div>
+        <div class="form-group mb-2">
+          <label>Nama Lengkap <span class="required">*</span></label>
+          <input type="text" id="nama" placeholder="Nama lengkap" />
+        </div>
+        <div class="form-group mb-2">
+          <label>Email <span class="required">*</span></label>
+          <input type="email" id="email" placeholder="email@giofans.com" />
+        </div>
+        <div class="form-group mb-2">
+          <label>Jabatan</label>
+          <select id="jabatan">
+            <option value="">-- Pilih Jabatan --</option>
+            <option>Warehouse Manager</option>
+            <option>Staff Gudang</option>
+            <option>Supervisor Logistik</option>
+            <option>Admin</option>
+          </select>
+        </div>
+        <div class="form-group mb-2">
+          <label>Password <span class="required">*</span></label>
+          <input type="password" id="password" placeholder="Min. 8 karakter" />
+        </div>
+        <div class="form-group mb-2">
+          <label>Konfirmasi Password <span class="required">*</span></label>
+          <input type="password" id="konfirmasi" placeholder="Ulangi password" />
+        </div>
+        <button class="btn btn-primary w-full" id="btn-register" onclick="doRegister()">Buat Akun</button>
+      </div>
+      <div class="auth-footer">
+        Sudah punya akun? <a href="login.html">Masuk</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    function showAlert(msg, type = 'danger') {
+      document.getElementById('alert-area').innerHTML =
+        `<div class="alert alert-${type}" style="margin-bottom:14px;">${type === 'danger' ? '⚠️' : '✅'} ${msg}</div>`;
+    }
+
+    async function doRegister() {
+      const nama = document.getElementById('nama').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const jabatan = document.getElementById('jabatan').value;
+      const password = document.getElementById('password').value;
+      const konfirmasi = document.getElementById('konfirmasi').value;
+
+      if (!nama || !email || !password || !konfirmasi) { showAlert('Semua field wajib diisi.'); return; }
+      if (password.length < 8) { showAlert('Password minimal 8 karakter.'); return; }
+      if (password !== konfirmasi) { showAlert('Konfirmasi password tidak cocok.'); return; }
+
+      const btn = document.getElementById('btn-register');
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+
+      const res = await API.register({ nama, email, jabatan: jabatan || 'Staff Gudang', password });
+
+      btn.disabled = false;
+      btn.textContent = 'Buat Akun';
+
+      if (!res || res.error) {
+        showAlert(res?.error || 'Gagal terhubung ke server.');
+        return;
+      }
+
+      showAlert('Akun berhasil dibuat! Silakan login.', 'success');
+      setTimeout(() => window.location.href = 'login.html', 1500);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histori Inbound — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Histori Inbound</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Histori Inbound</li>
+          </ul>
+          <h1>Histori Inbound</h1>
+          <p>Riwayat seluruh barang masuk ke gudang PT Giofans Logistik</p>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body" style="padding:14px 20px;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="flex:1;min-width:160px;margin:0;">
+                <label>Cari</label>
+                <input type="text" id="search" placeholder="ID, Barang, Supplier..." oninput="renderTable()" />
+              </div>
+              <div class="form-group" style="width:160px;margin:0;">
+                <label>Dari Tanggal</label>
+                <input type="date" id="date-from" onchange="renderTable()" />
+              </div>
+              <div class="form-group" style="width:160px;margin:0;">
+                <label>Sampai Tanggal</label>
+                <input type="date" id="date-to" onchange="renderTable()" />
+              </div>
+              <button class="btn btn-secondary" onclick="resetFilter()">↺ Reset</button>
+              <button class="btn btn-success" onclick="exportCSV()">⬇️ Export CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Data Inbound</div>
+            <div class="card-subtitle" id="row-count">Memuat...</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>ID Transaksi</th><th>Tanggal</th><th>No. SJ</th><th>Supplier</th><th>Kode Barang</th><th>Nama Barang</th><th>Jumlah</th><th>Satuan</th><th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="histori-table">
+                  <tr><td colspan="10" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let allData = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      allData = await API.getAllInbound() || [];
+      renderTable();
+    });
+
+    function getFiltered() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const from = document.getElementById('date-from').value;
+      const to = document.getElementById('date-to').value;
+      return allData.filter(i => {
+        const matchQ = !q || i.id.toLowerCase().includes(q) || i.namaBarang.toLowerCase().includes(q) || i.supplier.toLowerCase().includes(q) || i.kodeBarang.toLowerCase().includes(q);
+        const matchFrom = !from || i.tanggal >= from;
+        const matchTo = !to || i.tanggal <= to;
+        return matchQ && matchFrom && matchTo;
+      });
+    }
+
+    function renderTable() {
+      const data = getFiltered();
+      document.getElementById('row-count').textContent = `${data.length} record`;
+      if (!data.length) {
+        document.getElementById('histori-table').innerHTML = '<tr><td colspan="10" class="table-empty">Tidak ada data yang sesuai filter.</td></tr>';
+        return;
+      }
+      document.getElementById('histori-table').innerHTML = data.map((i, idx) => `
+        <tr>
+          <td class="text-muted text-sm">${idx + 1}</td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${i.id}</span></td>
+          <td>${formatDate(i.tanggal)}</td>
+          <td>${i.nomorSJ || '-'}</td>
+          <td>${i.supplier}</td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${i.kodeBarang}</span></td>
+          <td>${i.namaBarang}</td>
+          <td><strong>${formatNumber(i.jumlah)}</strong></td>
+          <td>${i.satuan}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="hapus('${i.id}')">🗑️</button></td>
+        </tr>`).join('');
+    }
+
+    async function hapus(id) {
+      confirmAction('Hapus data inbound ini? Stok akan disesuaikan.', async () => {
+        await API.deleteInbound(id);
+        allData = allData.filter(i => i.id !== id);
+        showToast('Data dihapus.', 'info');
+        renderTable();
+      });
+    }
+
+    function resetFilter() {
+      ['search','date-from','date-to'].forEach(id => document.getElementById(id).value = '');
+      renderTable();
+    }
+
+    function exportCSV() {
+      const data = getFiltered();
+      if (!data.length) { showToast('Tidak ada data untuk diekspor.', 'info'); return; }
+      const headers = ['ID','Tanggal','No SJ','Supplier','Kode Barang','Nama Barang','Jumlah','Satuan'];
+      const rows = data.map(i => [i.id, i.tanggal, i.nomorSJ, i.supplier, i.kodeBarang, i.namaBarang, i.jumlah, i.satuan]);
+      const csv = [headers, ...rows].map(r => r.map(c => `"${c ?? ''}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `histori-inbound-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      showToast('✅ File CSV berhasil diunduh.', 'success');
+    }
+  </script>
+</body>
+</html>

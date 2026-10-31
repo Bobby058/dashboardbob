@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Data Inventory</span>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-search">
+          <span class="icon">🔍</span>
+          <input type="text" placeholder="Cari barang..." id="search-input" oninput="renderTable()" />
+        </div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Inventory</li>
+          </ul>
+          <h1>Data Inventory</h1>
+          <p>Master data barang dan stok gudang PT Giofans Logistik</p>
+        </div>
+
+        <!-- MODAL -->
+        <div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;">
+          <div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:460px;margin:16px;">
+            <div class="d-flex justify-between align-center mb-2">
+              <h3 style="font-size:.95rem;" id="modal-title">Tambah Barang</h3>
+              <button onclick="closeModal()" style="border:none;background:none;cursor:pointer;font-size:1.2rem;">✕</button>
+            </div>
+            <div id="modal-alert"></div>
+            <div class="form-grid">
+              <div class="form-group">
+                <label>Kode Barang <span class="required">*</span></label>
+                <input type="text" id="m-kode" placeholder="BRG-XXX" />
+              </div>
+              <div class="form-group">
+                <label>Nama Barang <span class="required">*</span></label>
+                <input type="text" id="m-nama" placeholder="Nama barang" />
+              </div>
+              <div class="form-group">
+                <label>Kategori</label>
+                <select id="m-kategori">
+                  <option>Packaging</option><option>Alat</option><option>Perabot</option><option>Administrasi</option><option>Lainnya</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Satuan <span class="required">*</span></label>
+                <input type="text" id="m-satuan" placeholder="pcs / roll / unit" />
+              </div>
+              <div class="form-group">
+                <label>Stok Awal</label>
+                <input type="number" id="m-stok" placeholder="0" min="0" />
+              </div>
+              <div class="form-group">
+                <label>Min Stok Alert</label>
+                <input type="number" id="m-minStok" placeholder="5" min="0" />
+              </div>
+            </div>
+            <input type="hidden" id="m-edit-kode" />
+            <div class="btn-group mt-2">
+              <button class="btn btn-primary" onclick="simpanBarang()">💾 Simpan</button>
+              <button class="btn btn-secondary" onclick="closeModal()">Batal</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Daftar Barang</div>
+              <div class="card-subtitle" id="tbl-subtitle">Memuat...</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openModal()">+ Tambah Barang</button>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Stok</th><th>Satuan</th><th>Min Stok</th><th>Status</th><th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="barang-table">
+                  <tr><td colspan="8" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    const modal = document.getElementById('modal-overlay');
+    let allBarang = [];
+
+    document.addEventListener('DOMContentLoaded', loadBarang);
+
+    async function loadBarang() {
+      allBarang = await API.getAllBarang() || [];
+      renderTable();
+    }
+
+    function renderTable() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      let data = allBarang;
+      if (q) data = data.filter(b => b.kode.toLowerCase().includes(q) || b.nama.toLowerCase().includes(q) || (b.kategori||'').toLowerCase().includes(q));
+      document.getElementById('tbl-subtitle').textContent = `${data.length} barang terdaftar`;
+
+      if (!data.length) {
+        document.getElementById('barang-table').innerHTML = '<tr><td colspan="8" class="table-empty">Tidak ada data barang.</td></tr>';
+        return;
+      }
+      document.getElementById('barang-table').innerHTML = data.map(b => {
+        const isLow = Number(b.stok) <= Number(b.minStok || 5);
+        return `<tr ${isLow ? 'class="alert-row"' : ''}>
+          <td><span style="font-family:var(--font-mono);font-size:.75rem;">${b.kode}</span></td>
+          <td>${b.nama}</td>
+          <td><span class="badge badge-gray">${b.kategori || '-'}</span></td>
+          <td><strong>${formatNumber(b.stok)}</strong></td>
+          <td>${b.satuan}</td>
+          <td>${b.minStok || 5}</td>
+          <td>${isLow ? '<span class="badge badge-red">⚠️ Rendah</span>' : '<span class="badge badge-green">✅ Aman</span>'}</td>
+          <td>
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" onclick="editBarang('${b.kode}')">✏️</button>
+              <button class="btn btn-danger btn-sm" onclick="hapusBarang('${b.kode}')">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openModal(data = null) {
+      document.getElementById('modal-title').textContent = data ? 'Edit Barang' : 'Tambah Barang';
+      document.getElementById('m-kode').value = data?.kode || '';
+      document.getElementById('m-kode').disabled = !!data;
+      document.getElementById('m-nama').value = data?.nama || '';
+      document.getElementById('m-kategori').value = data?.kategori || 'Packaging';
+      document.getElementById('m-satuan').value = data?.satuan || '';
+      document.getElementById('m-stok').value = data?.stok ?? '';
+      document.getElementById('m-minStok').value = data?.minStok || '';
+      document.getElementById('m-edit-kode').value = data?.kode || '';
+      document.getElementById('modal-alert').innerHTML = '';
+      modal.style.display = 'flex';
+    }
+
+    function closeModal() { modal.style.display = 'none'; }
+    modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+    async function simpanBarang() {
+      const kode = document.getElementById('m-kode').value.trim();
+      const nama = document.getElementById('m-nama').value.trim();
+      const kategori = document.getElementById('m-kategori').value;
+      const satuan = document.getElementById('m-satuan').value.trim();
+      const stok = Number(document.getElementById('m-stok').value) || 0;
+      const minStok = Number(document.getElementById('m-minStok').value) || 5;
+      const editKode = document.getElementById('m-edit-kode').value;
+
+      if (!kode || !nama || !satuan) {
+        document.getElementById('modal-alert').innerHTML =
+          '<div class="alert alert-danger" style="margin-bottom:10px;">⚠️ Kode, Nama, dan Satuan wajib diisi.</div>';
+        return;
+      }
+
+      let res;
+      if (editKode) {
+        res = await API.updateBarang(editKode, { nama, kategori, satuan, minStok });
+      } else {
+        res = await API.addBarang({ kode, nama, kategori, satuan, stok, minStok });
+      }
+
+      if (!res || res.error) {
+        document.getElementById('modal-alert').innerHTML =
+          `<div class="alert alert-danger" style="margin-bottom:10px;">⚠️ ${res?.error || 'Gagal menyimpan data.'}</div>`;
+        return;
+      }
+
+      showToast(editKode ? '✅ Data barang diperbarui.' : '✅ Barang berhasil ditambahkan.', 'success');
+      closeModal();
+      await loadBarang();
+    }
+
+    function editBarang(kode) {
+      const b = allBarang.find(x => x.kode === kode);
+      if (b) openModal(b);
+    }
+
+    async function hapusBarang(kode) {
+      confirmAction(`Yakin hapus barang ${kode}?`, async () => {
+        await API.deleteBarang(kode);
+        showToast('Barang dihapus.', 'info');
+        await loadBarang();
+      });
+    }
+  </script>
+</body>
+</html>

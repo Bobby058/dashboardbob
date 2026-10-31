@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histori Outbound — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Histori Outbound</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Histori Outbound</li>
+          </ul>
+          <h1>Histori Outbound</h1>
+          <p>Riwayat seluruh barang keluar dari gudang PT Giofans Logistik</p>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body" style="padding:14px 20px;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="flex:1;min-width:160px;margin:0;">
+                <label>Cari</label>
+                <input type="text" id="search" placeholder="ID, Barang..." oninput="renderTable()" />
+              </div>
+              <div class="form-group" style="width:160px;margin:0;">
+                <label>Kategori</label>
+                <select id="filter-kategori" onchange="renderTable()">
+                  <option value="">Semua</option>
+                  <option>Pengiriman</option>
+                  <option>Pemakaian Internal</option>
+                  <option>Retur</option>
+                </select>
+              </div>
+              <div class="form-group" style="width:150px;margin:0;">
+                <label>Dari Tanggal</label>
+                <input type="date" id="date-from" onchange="renderTable()" />
+              </div>
+              <div class="form-group" style="width:150px;margin:0;">
+                <label>Sampai</label>
+                <input type="date" id="date-to" onchange="renderTable()" />
+              </div>
+              <button class="btn btn-secondary" onclick="resetFilter()">↺ Reset</button>
+              <button class="btn btn-success" onclick="exportCSV()">⬇️ Export CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Data Outbound</div>
+            <div class="card-subtitle" id="row-count">Memuat...</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>ID</th><th>Tanggal</th><th>Kategori</th><th>Kode Barang</th><th>Nama Barang</th><th>Jumlah</th><th>Satuan</th><th>Keterangan</th><th>Aksi</th>
+                  </tr>
+                </thead>
+                <tbody id="histori-table">
+                  <tr><td colspan="10" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let allData = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      allData = await API.getAllOutbound() || [];
+      renderTable();
+    });
+
+    function getFiltered() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const kat = document.getElementById('filter-kategori').value;
+      const from = document.getElementById('date-from').value;
+      const to = document.getElementById('date-to').value;
+      return allData.filter(o => {
+        const matchQ = !q || o.id.toLowerCase().includes(q) || o.namaBarang.toLowerCase().includes(q) || o.kodeBarang.toLowerCase().includes(q);
+        const matchKat = !kat || o.kategori === kat;
+        const matchFrom = !from || o.tanggal >= from;
+        const matchTo = !to || o.tanggal <= to;
+        return matchQ && matchKat && matchFrom && matchTo;
+      });
+    }
+
+    function renderTable() {
+      const data = getFiltered();
+      document.getElementById('row-count').textContent = `${data.length} record`;
+      if (!data.length) {
+        document.getElementById('histori-table').innerHTML = '<tr><td colspan="10" class="table-empty">Tidak ada data.</td></tr>';
+        return;
+      }
+      document.getElementById('histori-table').innerHTML = data.map((o, idx) => `
+        <tr>
+          <td class="text-muted text-sm">${idx + 1}</td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${o.id}</span></td>
+          <td>${formatDate(o.tanggal)}</td>
+          <td><span class="badge ${o.kategori === 'Retur' ? 'badge-amber' : o.kategori === 'Pengiriman' ? 'badge-blue' : 'badge-gray'}">${o.kategori}</span></td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${o.kodeBarang}</span></td>
+          <td>${o.namaBarang}</td>
+          <td><strong>${formatNumber(o.jumlah)}</strong></td>
+          <td>${o.satuan}</td>
+          <td>${o.keterangan || '-'}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="hapus('${o.id}')">🗑️</button></td>
+        </tr>`).join('');
+    }
+
+    async function hapus(id) {
+      confirmAction('Hapus data outbound ini? Stok akan disesuaikan.', async () => {
+        await API.deleteOutbound(id);
+        allData = allData.filter(o => o.id !== id);
+        showToast('Data dihapus.', 'info');
+        renderTable();
+      });
+    }
+
+    function resetFilter() {
+      ['search','filter-kategori','date-from','date-to'].forEach(id => document.getElementById(id).value = '');
+      renderTable();
+    }
+
+    function exportCSV() {
+      const data = getFiltered();
+      if (!data.length) { showToast('Tidak ada data untuk diekspor.', 'info'); return; }
+      const headers = ['ID','Tanggal','Kategori','Kode Barang','Nama Barang','Jumlah','Satuan','Keterangan'];
+      const rows = data.map(o => [o.id, o.tanggal, o.kategori, o.kodeBarang, o.namaBarang, o.jumlah, o.satuan, o.keterangan]);
+      const csv = [headers, ...rows].map(r => r.map(c => `"${c ?? ''}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `histori-outbound-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      showToast('✅ File CSV berhasil diunduh.', 'success');
+    }
+  </script>
+</body>
+</html>

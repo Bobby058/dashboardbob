@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profil — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Profil Pengguna</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Profil</li>
+          </ul>
+          <h1>Profil Pengguna</h1>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+          <div class="card">
+            <div class="profile-banner"></div>
+            <div class="profile-avatar-wrap">
+              <div class="profile-avatar" id="avatar-initials">A</div>
+              <button class="btn btn-secondary btn-sm" onclick="switchTab('edit')">✏️ Edit Profil</button>
+            </div>
+            <div class="profile-info">
+              <div class="profile-name" id="disp-nama">—</div>
+              <div class="profile-role" id="disp-jabatan">—</div>
+              <div style="margin-top:10px;font-size:.8rem;color:var(--text-muted);" id="disp-email">—</div>
+            </div>
+            <div style="border-top:1px solid var(--border);padding:16px 24px;">
+              <div style="font-size:.72rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin-bottom:12px;">Statistik Aktivitas</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;text-align:center;" id="stat-mini"></div>
+            </div>
+          </div>
+
+          <div>
+            <div class="tabs-wrapper">
+              <div class="tabs">
+                <a class="tab active" data-tab-id="tab-info" onclick="switchTab('info')">Info</a>
+                <a class="tab" data-tab-id="tab-edit" onclick="switchTab('edit')">Edit Profil</a>
+              </div>
+            </div>
+
+            <div id="tab-info" class="card">
+              <div class="card-header"><div class="card-title">Informasi Akun</div></div>
+              <div class="card-body">
+                <table style="width:100%;font-size:.83rem;">
+                  <tbody id="info-table"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div id="tab-edit" class="card" style="display:none;">
+              <div class="card-header"><div class="card-title">Edit Profil</div></div>
+              <div class="card-body">
+                <div id="edit-alert"></div>
+                <div class="form-group mb-2">
+                  <label>Nama Lengkap <span class="required">*</span></label>
+                  <input type="text" id="edit-nama" />
+                </div>
+                <div class="form-group mb-2">
+                  <label>Email <span class="required">*</span></label>
+                  <input type="email" id="edit-email" />
+                </div>
+                <div class="form-group mb-2">
+                  <label>Jabatan</label>
+                  <select id="edit-jabatan">
+                    <option>Warehouse Manager</option>
+                    <option>Staff Gudang</option>
+                    <option>Supervisor Logistik</option>
+                    <option>Admin</option>
+                  </select>
+                </div>
+                <div class="btn-group">
+                  <button class="btn btn-primary" onclick="saveProfile()">💾 Simpan Perubahan</button>
+                  <button class="btn btn-secondary" onclick="switchTab('info')">Batal</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let user = {};
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      user = await API.getProfile() || JSON.parse(localStorage.getItem('gf_user') || '{}');
+      renderProfile();
+      await renderStats();
+    });
+
+    function renderProfile() {
+      const inits = (user.nama || 'A').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
+      document.getElementById('avatar-initials').textContent = inits;
+      document.getElementById('disp-nama').textContent = user.nama || '-';
+      document.getElementById('disp-jabatan').textContent = user.jabatan || '-';
+      document.getElementById('disp-email').textContent = user.email || '-';
+      document.getElementById('edit-nama').value = user.nama || '';
+      document.getElementById('edit-email').value = user.email || '';
+      document.getElementById('edit-jabatan').value = user.jabatan || 'Staff Gudang';
+
+      const rows = [
+        ['Nama Lengkap', user.nama],
+        ['Email', user.email],
+        ['Jabatan', user.jabatan],
+        ['Perusahaan', 'PT Giofans Logistik'],
+      ];
+      document.getElementById('info-table').innerHTML = rows.map(([k, v]) => `
+        <tr>
+          <td style="padding:9px 0;color:var(--text-muted);width:40%;">${k}</td>
+          <td style="padding:9px 0;font-weight:500;">${v || '-'}</td>
+        </tr>`).join('');
+    }
+
+    async function renderStats() {
+      const s = await API.getSummary() || {};
+      document.getElementById('stat-mini').innerHTML = `
+        <div>
+          <div style="font-size:1.3rem;font-weight:700;font-family:var(--font-mono);">${s.inboundCount || 0}</div>
+          <div style="font-size:.7rem;color:var(--text-muted);">Inbound</div>
+        </div>
+        <div>
+          <div style="font-size:1.3rem;font-weight:700;font-family:var(--font-mono);">${s.outboundCount || 0}</div>
+          <div style="font-size:.7rem;color:var(--text-muted);">Outbound</div>
+        </div>
+        <div>
+          <div style="font-size:1.3rem;font-weight:700;font-family:var(--font-mono);">${s.returCount || 0}</div>
+          <div style="font-size:.7rem;color:var(--text-muted);">Retur</div>
+        </div>`;
+    }
+
+    function switchTab(name) {
+      const tabs = { info: 'tab-info', edit: 'tab-edit' };
+      Object.values(tabs).forEach(id => document.getElementById(id).style.display = 'none');
+      document.getElementById(tabs[name]).style.display = '';
+      document.querySelectorAll('.tab').forEach(t => {
+        t.classList.toggle('active', t.dataset.tabId === tabs[name]);
+      });
+    }
+
+    async function saveProfile() {
+      const nama = document.getElementById('edit-nama').value.trim();
+      const email = document.getElementById('edit-email').value.trim();
+      const jabatan = document.getElementById('edit-jabatan').value;
+
+      if (!nama || !email) {
+        document.getElementById('edit-alert').innerHTML =
+          '<div class="alert alert-danger" style="margin-bottom:10px;">⚠️ Nama dan email wajib diisi.</div>';
+        return;
+      }
+
+      const res = await API.updateProfile({ nama, email, jabatan });
+      if (!res || res.error) {
+        document.getElementById('edit-alert').innerHTML =
+          `<div class="alert alert-danger" style="margin-bottom:10px;">⚠️ ${res?.error || 'Gagal menyimpan.'}</div>`;
+        return;
+      }
+
+      user = { ...user, nama, email, jabatan };
+      localStorage.setItem('gf_user', JSON.stringify(user));
+      document.getElementById('edit-alert').innerHTML = '';
+      renderProfile();
+      showToast('✅ Profil berhasil diperbarui.', 'success');
+      switchTab('info');
+    }
+  </script>
+</body>
+</html>

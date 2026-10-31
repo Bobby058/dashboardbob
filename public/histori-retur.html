@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Histori Retur — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Histori Retur</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Histori Retur</li>
+          </ul>
+          <h1>Histori Retur Barang</h1>
+          <p>Riwayat seluruh barang yang diretur ke supplier</p>
+        </div>
+
+        <div class="card mb-2">
+          <div class="card-body" style="padding:14px 20px;">
+            <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+              <div class="form-group" style="flex:1;min-width:160px;margin:0;">
+                <label>Cari</label>
+                <input type="text" id="search" placeholder="ID, Barang, Supplier..." oninput="renderTable()" />
+              </div>
+              <div class="form-group" style="width:150px;margin:0;">
+                <label>Dari Tanggal</label>
+                <input type="date" id="date-from" onchange="renderTable()" />
+              </div>
+              <div class="form-group" style="width:150px;margin:0;">
+                <label>Sampai</label>
+                <input type="date" id="date-to" onchange="renderTable()" />
+              </div>
+              <button class="btn btn-secondary" onclick="resetFilter()">↺ Reset</button>
+              <button class="btn btn-success" onclick="exportCSV()">⬇️ Export CSV</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">🔄 Data Retur Barang</div>
+            <div class="card-subtitle" id="row-count">Memuat...</div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>#</th><th>ID Retur</th><th>Tanggal</th><th>Kode Barang</th><th>Nama Barang</th><th>Jumlah</th><th>Satuan</th><th>Supplier</th><th>No. SJ Retur</th><th>Keterangan</th>
+                  </tr>
+                </thead>
+                <tbody id="histori-table">
+                  <tr><td colspan="10" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let allData = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      allData = await API.getAllRetur() || [];
+      renderTable();
+    });
+
+    function getFiltered() {
+      const q = document.getElementById('search').value.toLowerCase();
+      const from = document.getElementById('date-from').value;
+      const to = document.getElementById('date-to').value;
+      return allData.filter(r => {
+        const matchQ = !q || r.id?.toLowerCase().includes(q) || r.namaBarang?.toLowerCase().includes(q) || r.supplier?.toLowerCase().includes(q);
+        const matchFrom = !from || r.tanggal >= from;
+        const matchTo = !to || r.tanggal <= to;
+        return matchQ && matchFrom && matchTo;
+      });
+    }
+
+    function renderTable() {
+      const data = getFiltered();
+      document.getElementById('row-count').textContent = `${data.length} record`;
+      if (!data.length) {
+        document.getElementById('histori-table').innerHTML = '<tr><td colspan="10" class="table-empty">Belum ada data retur.</td></tr>';
+        return;
+      }
+      document.getElementById('histori-table').innerHTML = data.map((r, idx) => `
+        <tr>
+          <td class="text-muted text-sm">${idx + 1}</td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${r.id}</span></td>
+          <td>${formatDate(r.tanggal)}</td>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${r.kodeBarang}</span></td>
+          <td>${r.namaBarang}</td>
+          <td><strong>${formatNumber(r.jumlah)}</strong></td>
+          <td>${r.satuan}</td>
+          <td>${r.supplier || '-'}</td>
+          <td>${r.nomorSJ || '-'}</td>
+          <td>${r.keterangan || '-'}</td>
+        </tr>`).join('');
+    }
+
+    function resetFilter() {
+      ['search','date-from','date-to'].forEach(id => document.getElementById(id).value = '');
+      renderTable();
+    }
+
+    function exportCSV() {
+      const data = getFiltered();
+      if (!data.length) { showToast('Tidak ada data untuk diekspor.', 'info'); return; }
+      const headers = ['ID','Tanggal','Kode Barang','Nama Barang','Jumlah','Satuan','Supplier','No SJ Retur','Keterangan'];
+      const rows = data.map(r => [r.id, r.tanggal, r.kodeBarang, r.namaBarang, r.jumlah, r.satuan, r.supplier, r.nomorSJ, r.keterangan]);
+      const csv = [headers, ...rows].map(row => row.map(c => `"${c ?? ''}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `histori-retur-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      showToast('✅ File CSV berhasil diunduh.', 'success');
+    }
+  </script>
+</body>
+</html>

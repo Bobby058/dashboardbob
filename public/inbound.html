@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inbound — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Input Inbound</span>
+        <div class="topbar-spacer"></div>
+        <a href="inventory-alert.html" class="topbar-btn">🔔</a>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Inbound</li>
+          </ul>
+          <h1>Input Barang Masuk (Inbound)</h1>
+          <p>Catat barang yang masuk ke gudang dari supplier</p>
+        </div>
+
+        <div class="grid-2" style="align-items:start;">
+          <div class="card">
+            <div class="card-header"><div class="card-title">📥 Form Inbound Baru</div></div>
+            <div class="card-body">
+              <div id="form-alert"></div>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label>Tanggal <span class="required">*</span></label>
+                  <input type="date" id="tanggal" />
+                </div>
+                <div class="form-group">
+                  <label>Nomor Surat Jalan <span class="required">*</span></label>
+                  <input type="text" id="nomorSJ" placeholder="SJ-XXXX" />
+                </div>
+                <div class="form-group form-full">
+                  <label>Supplier <span class="required">*</span></label>
+                  <input type="text" id="supplier" placeholder="Nama supplier" />
+                </div>
+                <div class="form-group">
+                  <label>Kode Barang <span class="required">*</span></label>
+                  <select id="kodeBarang" onchange="autofillNama()">
+                    <option value="">-- Pilih Kode --</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Nama Barang</label>
+                  <input type="text" id="namaBarang" readonly style="background:var(--surface-2);" />
+                </div>
+                <div class="form-group">
+                  <label>Jumlah <span class="required">*</span></label>
+                  <input type="number" id="jumlah" placeholder="0" min="1" />
+                </div>
+                <div class="form-group">
+                  <label>Satuan</label>
+                  <input type="text" id="satuan" readonly style="background:var(--surface-2);" />
+                </div>
+              </div>
+              <div class="btn-group mt-2">
+                <button class="btn btn-primary" onclick="simpanInbound()">💾 Simpan Data</button>
+                <button class="btn btn-secondary" onclick="resetForm()">↺ Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Data Inbound Terbaru</div>
+              <a href="histori-inbound.html" class="btn btn-secondary btn-sm">Semua →</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Barang</th><th>Jml</th><th>Tgl</th><th></th></tr>
+                  </thead>
+                  <tbody id="recent-inbound">
+                    <tr><td colspan="5" class="table-empty">Memuat...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    let barangList = [];
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      document.getElementById('tanggal').value = new Date().toISOString().split('T')[0];
+      barangList = await API.getAllBarang() || [];
+      populateKodeBarang();
+      await renderRecentInbound();
+    });
+
+    function populateKodeBarang() {
+      const sel = document.getElementById('kodeBarang');
+      barangList.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.kode;
+        opt.textContent = `${b.kode} — ${b.nama}`;
+        opt.dataset.nama = b.nama;
+        opt.dataset.satuan = b.satuan;
+        sel.appendChild(opt);
+      });
+    }
+
+    function autofillNama() {
+      const sel = document.getElementById('kodeBarang');
+      const opt = sel.options[sel.selectedIndex];
+      document.getElementById('namaBarang').value = opt?.dataset.nama || '';
+      document.getElementById('satuan').value = opt?.dataset.satuan || '';
+    }
+
+    function showFormAlert(msg, type = 'danger') {
+      document.getElementById('form-alert').innerHTML =
+        `<div class="alert alert-${type}" style="margin-bottom:12px;">${msg}</div>`;
+    }
+
+    async function simpanInbound() {
+      document.getElementById('form-alert').innerHTML = '';
+      const tanggal = document.getElementById('tanggal').value;
+      const nomorSJ = document.getElementById('nomorSJ').value.trim();
+      const supplier = document.getElementById('supplier').value.trim();
+      const kodeBarang = document.getElementById('kodeBarang').value;
+      const namaBarang = document.getElementById('namaBarang').value;
+      const jumlah = document.getElementById('jumlah').value;
+      const satuan = document.getElementById('satuan').value;
+
+      if (!tanggal || !nomorSJ || !supplier || !kodeBarang || !jumlah) {
+        showFormAlert('⚠️ Semua field bertanda * wajib diisi.'); return;
+      }
+      if (Number(jumlah) < 1) { showFormAlert('⚠️ Jumlah harus lebih dari 0.'); return; }
+
+      const res = await API.addInbound({ tanggal, nomorSJ, supplier, kodeBarang, namaBarang, jumlah: Number(jumlah), satuan });
+
+      if (!res || res.error) { showFormAlert(res?.error || 'Gagal menyimpan.'); return; }
+
+      showToast('✅ Data inbound berhasil disimpan!', 'success');
+      resetForm();
+      await renderRecentInbound();
+    }
+
+    function resetForm() {
+      ['nomorSJ','supplier','namaBarang','jumlah','satuan'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('kodeBarang').value = '';
+      document.getElementById('tanggal').value = new Date().toISOString().split('T')[0];
+      document.getElementById('form-alert').innerHTML = '';
+    }
+
+    async function renderRecentInbound() {
+      const data = (await API.getAllInbound() || []).slice(0, 8);
+      if (!data.length) {
+        document.getElementById('recent-inbound').innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada data inbound.</td></tr>';
+        return;
+      }
+      document.getElementById('recent-inbound').innerHTML = data.map(i => `
+        <tr>
+          <td><span style="font-family:var(--font-mono);font-size:.7rem;">${i.id}</span></td>
+          <td>${i.namaBarang}</td>
+          <td>${formatNumber(i.jumlah)} ${i.satuan}</td>
+          <td>${formatDate(i.tanggal)}</td>
+          <td><button class="btn btn-danger btn-sm" onclick="hapusInbound('${i.id}')">🗑️</button></td>
+        </tr>`).join('');
+    }
+
+    async function hapusInbound(id) {
+      confirmAction('Yakin hapus data inbound ini? Stok akan disesuaikan.', async () => {
+        await API.deleteInbound(id);
+        showToast('Data inbound dihapus.', 'info');
+        await renderRecentInbound();
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inventory Alert — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title">Inventory Alert</span>
+        <div class="topbar-spacer"></div>
+        <a href="profile.html" class="topbar-btn">👤</a>
+        <button class="topbar-btn" onclick="logout()">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <ul class="breadcrumb">
+            <li><a href="index.html">Dashboard</a></li>
+            <li><span class="breadcrumb-sep">›</span></li>
+            <li>Inventory Alert</li>
+          </ul>
+          <h1>⚠️ Inventory Alert</h1>
+          <p>Daftar barang yang stoknya di bawah batas minimum</p>
+        </div>
+
+        <div id="summary-bar" class="mb-2"></div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Barang Stok Rendah</div>
+              <div class="card-subtitle" id="alert-count">Memuat...</div>
+            </div>
+            <a href="inbound.html" class="btn btn-primary btn-sm">+ Input Inbound</a>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Stok Saat Ini</th><th>Min Stok</th><th>Kekurangan</th><th>Status</th></tr>
+                </thead>
+                <tbody id="alert-table">
+                  <tr><td colspan="7" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-2">
+          <div class="card-header">
+            <div class="card-title">✅ Barang Stok Aman</div>
+            <div class="card-subtitle" id="safe-count"></div>
+          </div>
+          <div class="card-body" style="padding:0;">
+            <div class="table-wrapper">
+              <table>
+                <thead>
+                  <tr><th>Kode</th><th>Nama Barang</th><th>Kategori</th><th>Stok</th><th>Min Stok</th><th>Status</th></tr>
+                </thead>
+                <tbody id="safe-table">
+                  <tr><td colspan="6" class="table-empty">Memuat data...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const all = await API.getAllBarang() || [];
+      const low = all.filter(b => Number(b.stok || 0) <= Number(b.minStok || 5));
+      const safe = all.filter(b => Number(b.stok || 0) > Number(b.minStok || 5));
+
+      document.getElementById('alert-count').textContent = `${low.length} barang perlu perhatian`;
+      document.getElementById('safe-count').textContent = `${safe.length} barang`;
+
+      const pct = all.length ? Math.round((safe.length / all.length) * 100) : 100;
+      document.getElementById('summary-bar').innerHTML = `
+        <div class="alert ${low.length > 0 ? 'alert-warning' : 'alert-success'}">
+          <span style="font-size:1.2rem;">${low.length > 0 ? '⚠️' : '✅'}</span>
+          <div>
+            <strong>${low.length > 0 ? `${low.length} barang stok rendah ditemukan` : 'Semua stok dalam kondisi aman!'}</strong><br>
+            <span style="font-size:.75rem;">${pct}% barang (${safe.length}/${all.length}) dalam kondisi aman.</span>
+          </div>
+        </div>`;
+
+      if (!low.length) {
+        document.getElementById('alert-table').innerHTML = '<tr><td colspan="7" class="table-empty">✅ Tidak ada barang dengan stok rendah.</td></tr>';
+      } else {
+        document.getElementById('alert-table').innerHTML = low.map(b => {
+          const stok = Number(b.stok || 0);
+          const min = Number(b.minStok || 5);
+          const kekurangan = Math.max(0, min - stok);
+          return `<tr class="alert-row">
+            <td><span style="font-family:var(--font-mono);font-size:.75rem;">${b.kode}</span></td>
+            <td><strong>${b.nama}</strong></td>
+            <td><span class="badge badge-gray">${b.kategori || '-'}</span></td>
+            <td><span class="badge badge-red">${stok} ${b.satuan}</span></td>
+            <td>${min}</td>
+            <td><span style="color:var(--danger);font-weight:600;">-${kekurangan}</span></td>
+            <td>${stok === 0 ? '<span class="badge badge-red">🚨 Habis</span>' : '<span class="badge badge-amber">⚠️ Rendah</span>'}</td>
+          </tr>`;
+        }).join('');
+      }
+
+      if (!safe.length) {
+        document.getElementById('safe-table').innerHTML = '<tr><td colspan="6" class="table-empty">Belum ada barang.</td></tr>';
+      } else {
+        document.getElementById('safe-table').innerHTML = safe.map(b => `
+          <tr>
+            <td><span style="font-family:var(--font-mono);font-size:.75rem;">${b.kode}</span></td>
+            <td>${b.nama}</td>
+            <td><span class="badge badge-gray">${b.kategori || '-'}</span></td>
+            <td>${formatNumber(b.stok)} ${b.satuan}</td>
+            <td>${b.minStok || 5}</td>
+            <td><span class="badge badge-green">✅ Aman</span></td>
+          </tr>`).join('');
+      }
+    });
+  </script>
+</body>
+</html>

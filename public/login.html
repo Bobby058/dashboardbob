@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Login — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>
+    .input-icon-wrap { position: relative; }
+    .input-icon-wrap input { padding-right: 40px; }
+    .input-icon {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-light); cursor: pointer; font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="auth-layout">
+    <div class="auth-card">
+      <div class="auth-header">
+        <div class="auth-logo">📦</div>
+        <div class="auth-title">PT Giofans Logistik</div>
+        <div class="auth-subtitle">Sistem Manajemen Gudang</div>
+      </div>
+      <div class="auth-body">
+        <div id="alert-area"></div>
+        <div class="form-group mb-2">
+          <label for="username">Email</label>
+          <input type="text" id="username" placeholder="email@giofans.com" />
+        </div>
+        <div class="form-group mb-2">
+          <label for="password">Password</label>
+          <div class="input-icon-wrap">
+            <input type="password" id="password" placeholder="Masukkan password" />
+            <span class="input-icon" onclick="togglePass()">👁️</span>
+          </div>
+        </div>
+        <button class="btn btn-primary w-full" id="btn-login" onclick="doLogin()">Masuk</button>
+      </div>
+      <div class="auth-footer">
+        Belum punya akun? <a href="register.html">Daftar sekarang</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script>
+    // Redirect jika sudah login
+    if (localStorage.getItem('gf_token')) {
+      window.location.href = 'index.html';
+    }
+
+    function togglePass() {
+      const p = document.getElementById('password');
+      p.type = p.type === 'password' ? 'text' : 'password';
+    }
+
+    function showAlert(msg, type = 'danger') {
+      document.getElementById('alert-area').innerHTML =
+        `<div class="alert alert-${type}" style="margin-bottom:14px;">⚠️ ${msg}</div>`;
+    }
+
+    async function doLogin() {
+      const email = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      if (!email || !password) { showAlert('Email dan password wajib diisi.'); return; }
+
+      const btn = document.getElementById('btn-login');
+      btn.disabled = true;
+      btn.textContent = 'Memproses...';
+
+      const res = await API.login({ email, password });
+
+      btn.disabled = false;
+      btn.textContent = 'Masuk';
+
+      if (!res || res.error) {
+        showAlert(res?.error || 'Gagal terhubung ke server.');
+        return;
+      }
+
+      // Simpan token dan data user
+      localStorage.setItem('gf_token', res.token);
+      localStorage.setItem('gf_logged', '1');
+      localStorage.setItem('gf_user', JSON.stringify(res.user));
+      window.location.href = 'index.html';
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  </script>
+</body>
+</html>

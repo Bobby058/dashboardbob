@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — PT Giofans Logistik</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <style>body { visibility: hidden; }</style>
+</head>
+<body>
+  <div class="layout">
+    <div class="main-content" id="main-content">
+      <div class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle">☰</button>
+        <span class="topbar-title" id="topbar-title">Dashboard</span>
+        <div class="topbar-spacer"></div>
+        <div class="topbar-search">
+          <span class="icon">🔍</span>
+          <input type="text" placeholder="Cari barang..." id="quick-search" />
+        </div>
+        <a href="inventory-alert.html" class="topbar-btn" title="Inventory Alert" id="alert-btn">
+          🔔 <span class="badge-dot" id="alert-dot" style="display:none;"></span>
+        </a>
+        <a href="profile.html" class="topbar-btn" title="Profil">👤</a>
+        <button class="topbar-btn" onclick="logout()" title="Keluar">🚪</button>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <h1>Dashboard</h1>
+          <p>Ringkasan aktivitas gudang PT Giofans Logistik</p>
+        </div>
+
+        <div class="stats-grid" id="stats-grid"></div>
+
+        <div class="grid-2 mb-3">
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Inbound vs Outbound</div>
+                <div class="card-subtitle">Volume per bulan (tahun berjalan)</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="height:220px;">
+                <canvas id="chart-line"></canvas>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <div>
+                <div class="card-title">Komposisi Stok</div>
+                <div class="card-subtitle">Berdasarkan kategori barang</div>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="chart-container" style="height:220px;">
+                <canvas id="chart-donut"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Transaksi Terbaru</div>
+              <a href="histori-inbound.html" class="btn btn-secondary btn-sm">Lihat Semua</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>ID</th><th>Barang</th><th>Tipe</th><th>Jml</th><th>Tgl</th></tr>
+                  </thead>
+                  <tbody id="recent-table">
+                    <tr><td colspan="5" class="table-empty">Memuat data...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">⚠️ Stok Menipis</div>
+              <a href="inventory-alert.html" class="btn btn-secondary btn-sm">Detail</a>
+            </div>
+            <div class="card-body" style="padding:0;">
+              <div class="table-wrapper">
+                <table>
+                  <thead>
+                    <tr><th>Kode</th><th>Nama Barang</th><th>Stok</th><th>Min</th></tr>
+                  </thead>
+                  <tbody id="low-stock-table">
+                    <tr><td colspan="4" class="table-empty">Memuat data...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/sidebar.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      await renderStats();
+      await renderRecent();
+      await initCharts();
+    });
+
+    async function renderStats() {
+      const s = await API.getSummary();
+      if (!s) return;
+      document.getElementById('stats-grid').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-icon blue">📦</div><span class="stat-trend up">+${s.totalBarang} item</span></div>
+          <div class="stat-value">${formatNumber(s.totalStok)}</div>
+          <div class="stat-label">Total Stok</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-icon green">📥</div><span class="stat-trend up">Hari ini: ${s.inboundToday}</span></div>
+          <div class="stat-value">${formatNumber(s.inboundCount)}</div>
+          <div class="stat-label">Total Inbound</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-icon amber">📤</div><span class="stat-trend">Hari ini: ${s.outboundToday}</span></div>
+          <div class="stat-value">${formatNumber(s.outboundCount)}</div>
+          <div class="stat-label">Total Outbound</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card-header"><div class="stat-icon red">⚠️</div>
+            ${s.lowStok > 0 ? '<span class="stat-trend down">Perlu reorder</span>' : '<span class="stat-trend up">Aman</span>'}
+          </div>
+          <div class="stat-value">${s.lowStok}</div>
+          <div class="stat-label">Barang Stok Rendah</div>
+        </div>`;
+      if (s.lowStok > 0) document.getElementById('alert-dot').style.display = 'block';
+
+      // Low stock table
+      const barang = await API.getAllBarang();
+      const low = (barang || []).filter(b => Number(b.stok || 0) <= Number(b.minStok || 5));
+      if (!low.length) {
+        document.getElementById('low-stock-table').innerHTML = '<tr><td colspan="4" class="table-empty">✅ Semua stok aman.</td></tr>';
+      } else {
+        document.getElementById('low-stock-table').innerHTML = low.map(b => `
+          <tr class="alert-row">
+            <td><span style="font-family:var(--font-mono);font-size:.72rem;">${b.kode}</span></td>
+            <td>${b.nama}</td>
+            <td><span class="badge badge-red">${b.stok} ${b.satuan}</span></td>
+            <td>${b.minStok || 5}</td>
+          </tr>`).join('');
+      }
+    }
+
+    async function renderRecent() {
+      const [inboundData, outboundData] = await Promise.all([API.getAllInbound(), API.getAllOutbound()]);
+      const inbound = (inboundData || []).slice(0, 4).map(i => ({ ...i, tipe: 'Inbound' }));
+      const outbound = (outboundData || []).slice(0, 4).map(o => ({ ...o, tipe: o.kategori === 'Retur' ? 'Retur' : 'Outbound' }));
+      const all = [...inbound, ...outbound]
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .slice(0, 6);
+
+      if (!all.length) {
+        document.getElementById('recent-table').innerHTML = '<tr><td colspan="5" class="table-empty">Belum ada transaksi.</td></tr>';
+        return;
+      }
+      document.getElementById('recent-table').innerHTML = all.map(t => `
+        <tr>
+          <td><span style="font-family:var(--font-mono);font-size:.72rem;">${t.id}</span></td>
+          <td>${t.namaBarang}</td>
+          <td><span class="badge ${t.tipe === 'Inbound' ? 'badge-blue' : t.tipe === 'Retur' ? 'badge-amber' : 'badge-green'}">${t.tipe}</span></td>
+          <td>${formatNumber(t.jumlah)} ${t.satuan}</td>
+          <td>${formatDate(t.tanggal)}</td>
+        </tr>`).join('');
+    }
+
+    async function initCharts() {
+      const chart = await API.getChartData();
+      if (!chart) return;
+      const { months, inboundByMonth, outboundByMonth, kategoriLabels, kategoriValues } = chart;
+
+      const lineCtx = document.getElementById('chart-line')?.getContext('2d');
+      if (lineCtx) {
+        new Chart(lineCtx, {
+          type: 'line',
+          data: {
+            labels: months,
+            datasets: [
+              { label: 'Inbound', data: inboundByMonth, borderColor: '#1a56db', backgroundColor: 'rgba(26,86,219,0.08)', fill: true, tension: 0.4, pointRadius: 4 },
+              { label: 'Outbound', data: outboundByMonth, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)', fill: true, tension: 0.4, pointRadius: 4 },
+            ],
+          },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } }, scales: { y: { beginAtZero: true } } },
+        });
+      }
+
+      const donutCtx = document.getElementById('chart-donut')?.getContext('2d');
+      if (donutCtx) {
+        const colors = ['#1a56db','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4'];
+        new Chart(donutCtx, {
+          type: 'doughnut',
+          data: { labels: kategoriLabels, datasets: [{ data: kategoriValues, backgroundColor: colors.slice(0, kategoriLabels.length), borderWidth: 2, borderColor: '#fff' }] },
+          options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, cutout: '68%' },
+        });
+      }
+    }
+
+    document.getElementById('quick-search')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.location.href = 'inventory.html';
+    });
+  </script>
+</body>
+</html>
